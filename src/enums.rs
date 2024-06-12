@@ -70,4 +70,3 @@ pub fn generate_color(x: u32, y: u32) -> Tile {
         _ => Tile::Red,
     }
 }
-

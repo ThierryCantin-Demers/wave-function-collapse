@@ -2,7 +2,10 @@ use std::collections::HashSet;
 
 use bmp::{Image, Pixel};
 
-use crate::{enums::{Direction, Tile}, state::State};
+use crate::{
+    enums::{Direction, Tile},
+    state::State,
+};
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct Rule {
@@ -28,16 +31,32 @@ pub fn extract_rules(img: &Image) -> HashSet<Rule> {
         let (up, down, left, right) = get_image_adjacent_pixels(img, x, y);
 
         if up.is_some() {
-            rules.insert(Rule::new(curr_tile.into(), up.unwrap().into(), Direction::Up));
+            rules.insert(Rule::new(
+                curr_tile.into(),
+                up.unwrap().into(),
+                Direction::Up,
+            ));
         }
         if down.is_some() {
-            rules.insert(Rule::new(curr_tile.into(), down.unwrap().into(), Direction::Down));
+            rules.insert(Rule::new(
+                curr_tile.into(),
+                down.unwrap().into(),
+                Direction::Down,
+            ));
         }
         if left.is_some() {
-            rules.insert(Rule::new(curr_tile.into(), left.unwrap().into(), Direction::Left));
+            rules.insert(Rule::new(
+                curr_tile.into(),
+                left.unwrap().into(),
+                Direction::Left,
+            ));
         }
         if right.is_some() {
-            rules.insert(Rule::new(curr_tile.into(), right.unwrap().into(), Direction::Right));
+            rules.insert(Rule::new(
+                curr_tile.into(),
+                right.unwrap().into(),
+                Direction::Right,
+            ));
         }
     }
 

@@ -2,9 +2,13 @@ use std::{collections::HashSet, path::PathBuf};
 
 use bmp::Image;
 
-use crate::{enums::Tile, files::delete_files_in_dir, rules::{apply_rules, get_possibilities_adjacent_pixels, Rule}};
-use std::io::Write;
+use crate::{
+    enums::Tile,
+    files::delete_files_in_dir,
+    rules::{apply_rules, get_possibilities_adjacent_pixels, Rule},
+};
 use rand::prelude::SliceRandom;
+use std::io::Write;
 
 #[derive(Clone, Debug)]
 pub struct State {
@@ -68,7 +72,11 @@ impl State {
         let file = std::fs::File::create(file_path).unwrap();
         let mut w = std::io::BufWriter::new(file);
         for rule in &self.rules {
-            let _ = write!(w, "{:?} can be at {:?} of {:?}\n", rule.curr_tile, rule.direction, rule.adj_tile);
+            let _ = write!(
+                w,
+                "{:?} can be at {:?} of {:?}\n",
+                rule.curr_tile, rule.direction, rule.adj_tile
+            );
         }
         w.flush().expect("Should be able to flush writer buffer.");
     }
@@ -182,7 +190,7 @@ pub fn generate_image(w: u32, h: u32, rules: &HashSet<Rule>) -> Option<Image> {
         .possible_vals
         .iter()
         .any(|row| row.iter().any(|tile| tile.len() > 1))
-        {
+    {
         let mut old_state = state.clone();
         let next_tile_coord = get_lowest_entropy_tiles(&state.possible_vals);
         if next_tile_coord.is_none() {
@@ -233,13 +241,123 @@ pub fn generate_image(w: u32, h: u32, rules: &HashSet<Rule>) -> Option<Image> {
     };
 }
 
-
 #[cfg(test)]
 mod tests {
+
     mod get_lowest_entropy_tiles {
-        #[test]
-        pub fn test1() {
-            assert_eq!(1+1, 2);
+        use rstest::{fixture, rstest};
+
+        use crate::{
+            enums::Tile,
+            state::{get_lowest_entropy_tiles, HashSetExt},
+        };
+
+        #[fixture]
+        fn one_at_2() -> Vec<Vec<std::collections::HashSet<Tile>>> {
+            vec![
+                vec![
+                    std::collections::HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green),
+                    std::collections::HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green)
+                        .with(Tile::Red),
+                ],
+                vec![
+                    std::collections::HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green)
+                        .with(Tile::Red),
+                    std::collections::HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green)
+                        .with(Tile::Red),
+                ],
+            ]
+        }
+
+        #[fixture]
+        fn one_at_2_and_1() -> Vec<Vec<std::collections::HashSet<Tile>>> {
+            vec![
+                vec![
+                    std::collections::HashSet::new().with(Tile::Blue),
+                    std::collections::HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green),
+                ],
+                vec![
+                    std::collections::HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green)
+                        .with(Tile::Red),
+                    std::collections::HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green)
+                        .with(Tile::Red),
+                ],
+            ]
+        }
+
+        #[fixture]
+        fn one_at_1() -> Vec<Vec<std::collections::HashSet<Tile>>> {
+            vec![
+                vec![
+                    std::collections::HashSet::new().with(Tile::Blue),
+                    std::collections::HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green),
+                ],
+                vec![
+                    std::collections::HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green),
+                    std::collections::HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green),
+                ],
+            ]
+        }
+
+        #[fixture]
+        fn all_at_1() -> Vec<Vec<std::collections::HashSet<Tile>>> {
+            vec![
+                vec![
+                    std::collections::HashSet::new().with(Tile::Blue),
+                    std::collections::HashSet::new().with(Tile::Green),
+                ],
+                vec![
+                    std::collections::HashSet::new().with(Tile::Red),
+                    std::collections::HashSet::new().with(Tile::Blue),
+                ],
+            ]
+        }
+
+        #[rstest]
+        pub fn test1(one_at_2: Vec<Vec<std::collections::HashSet<Tile>>>) {
+            println!("{:?}", one_at_2[0][0]);
+            let res = get_lowest_entropy_tiles(&one_at_2);
+            assert_eq!(res, Some((0, 0)));
+        }
+
+        #[rstest]
+        pub fn test2(one_at_2_and_1: Vec<Vec<std::collections::HashSet<Tile>>>) {
+            let res = get_lowest_entropy_tiles(&one_at_2_and_1);
+            assert_eq!(res, Some((0, 1)));
+        }
+
+        #[rstest]
+        pub fn test3(one_at_1: Vec<Vec<std::collections::HashSet<Tile>>>) {
+            for _ in 0..1000 {
+                let res = get_lowest_entropy_tiles(&one_at_1);
+                assert_ne!(res, Some((0, 0)));
+            }
+        }
+
+        #[rstest]
+        pub fn test4(all_at_1: Vec<Vec<std::collections::HashSet<Tile>>>) {
+            let res = get_lowest_entropy_tiles(&all_at_1);
+            assert_eq!(res, None);
         }
     }
 }

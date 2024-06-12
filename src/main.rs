@@ -1,4 +1,3 @@
-
 use bmp::Image;
 use wfc::enums::generate_color;
 use wfc::rules::extract_rules;
