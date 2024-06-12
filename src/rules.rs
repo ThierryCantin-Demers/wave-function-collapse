@@ -4,25 +4,40 @@ use bmp::{Image, Pixel};
 
 use crate::{enums::{Direction, Tile}, state::State};
 
-pub type Rule = (Tile, Tile, Direction);
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct Rule {
+    pub curr_tile: Tile,
+    pub adj_tile: Tile,
+    pub direction: Direction,
+}
+
+impl Rule {
+    pub fn new(curr_tile: Tile, adj_tile: Tile, direction: Direction) -> Self {
+        Rule {
+            curr_tile,
+            adj_tile,
+            direction,
+        }
+    }
+}
 
 pub fn extract_rules(img: &Image) -> HashSet<Rule> {
-    let mut rules = HashSet::new();
+    let mut rules: HashSet<Rule> = HashSet::new();
     for (x, y) in img.coordinates() {
         let curr_tile = img.get_pixel(x, y);
         let (up, down, left, right) = get_image_adjacent_pixels(img, x, y);
 
         if up.is_some() {
-            rules.insert((curr_tile.into(), up.unwrap().into(), Direction::Up));
+            rules.insert(Rule::new(curr_tile.into(), up.unwrap().into(), Direction::Up));
         }
         if down.is_some() {
-            rules.insert((curr_tile.into(), down.unwrap().into(), Direction::Down));
+            rules.insert(Rule::new(curr_tile.into(), down.unwrap().into(), Direction::Down));
         }
         if left.is_some() {
-            rules.insert((curr_tile.into(), left.unwrap().into(), Direction::Left));
+            rules.insert(Rule::new(curr_tile.into(), left.unwrap().into(), Direction::Left));
         }
         if right.is_some() {
-            rules.insert((curr_tile.into(), right.unwrap().into(), Direction::Right));
+            rules.insert(Rule::new(curr_tile.into(), right.unwrap().into(), Direction::Right));
         }
     }
 
@@ -42,11 +57,10 @@ pub fn apply_rules(curr_state: &mut State, rules: &HashSet<Rule>) {
             }
 
             for rule in rules {
-                let (curr_tile, adj_tile, direction) = rule;
-                if !possibilities.contains(curr_tile) {
+                if !possibilities.contains(&rule.curr_tile) {
                     continue;
                 }
-                let (dx, dy) = direction.offset();
+                let (dx, dy) = rule.direction.offset();
                 let adj_x = x as i32 + dx;
                 let adj_y = y as i32 + dy;
                 if adj_x < 0 || adj_x >= w as i32 || adj_y < 0 || adj_y >= h as i32 {
@@ -55,8 +69,8 @@ pub fn apply_rules(curr_state: &mut State, rules: &HashSet<Rule>) {
                 let adj_x = adj_x as usize;
                 let adj_y = adj_y as usize;
                 let adj_possibilities = curr_state.get(adj_x, adj_y);
-                if !adj_possibilities.contains(adj_tile) {
-                    new_state[x][y].remove(curr_tile);
+                if !adj_possibilities.contains(&rule.adj_tile) {
+                    new_state[x][y].remove(&rule.curr_tile);
                     if possibilities.len() == 1 {
                         break;
                     }

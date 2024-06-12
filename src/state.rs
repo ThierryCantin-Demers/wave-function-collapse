@@ -68,7 +68,7 @@ impl State {
         let file = std::fs::File::create(file_path).unwrap();
         let mut w = std::io::BufWriter::new(file);
         for rule in &self.rules {
-            let _ = write!(w, "{:?} can be at {:?} of {:?}\n", rule.0, rule.2, rule.1);
+            let _ = write!(w, "{:?} can be at {:?} of {:?}\n", rule.curr_tile, rule.direction, rule.adj_tile);
         }
         w.flush().expect("Should be able to flush writer buffer.");
     }
@@ -170,8 +170,8 @@ pub fn generate_image(w: u32, h: u32, rules: &HashSet<Rule>) -> Option<Image> {
     delete_files_in_dir("imgs/output").expect("Failed to delete files");
     let mut all_tiles_types = HashSet::new();
     for rule in rules {
-        all_tiles_types.insert(rule.0.clone());
-        all_tiles_types.insert(rule.1.clone());
+        all_tiles_types.insert(rule.curr_tile.clone());
+        all_tiles_types.insert(rule.adj_tile.clone());
     }
 
     let mut state: State = State::new(w as usize, h as usize, &all_tiles_types, rules.clone());
