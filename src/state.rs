@@ -127,7 +127,7 @@ pub fn get_image_from_possible_vals(state: &State) -> Option<Image> {
     Some(img)
 }
 
-fn get_lowest_entropy_tiles(possible_vals: &Vec<Vec<HashSet<Tile>>>) -> Option<(usize, usize)> {
+fn get_lowest_entropy_tile(possible_vals: &Vec<Vec<HashSet<Tile>>>) -> Option<(usize, usize)> {
     let mut min_entropy = usize::MAX;
     let mut min_entropy_tiles = Vec::new();
 
@@ -152,11 +152,19 @@ fn get_lowest_entropy_tiles(possible_vals: &Vec<Vec<HashSet<Tile>>>) -> Option<(
 
 pub trait HashSetExt<T> {
     fn with(self, value: T) -> HashSet<T>;
+    fn with_all(self: Self, values: Vec<T>) -> HashSet<T>;
 }
 
 impl<T: std::hash::Hash + Eq + Clone> HashSetExt<T> for HashSet<T> {
     fn with(mut self: Self, value: T) -> HashSet<T> {
         self.insert(value);
+        self
+    }
+
+    fn with_all(mut self: Self, values: Vec<T>) -> HashSet<T> {
+        for value in values {
+            self.insert(value);
+        }
         self
     }
 }
@@ -192,7 +200,7 @@ pub fn generate_image(w: u32, h: u32, rules: &HashSet<Rule>) -> Option<Image> {
         .any(|row| row.iter().any(|tile| tile.len() > 1))
     {
         let mut old_state = state.clone();
-        let next_tile_coord = get_lowest_entropy_tiles(&state.possible_vals);
+        let next_tile_coord = get_lowest_entropy_tile(&state.possible_vals);
         if next_tile_coord.is_none() {
             break;
         }
@@ -210,7 +218,7 @@ pub fn generate_image(w: u32, h: u32, rules: &HashSet<Rule>) -> Option<Image> {
         apply_rules(&mut state, rules);
         while contains_invalid_tiles(&state.possible_vals) {
             state.possible_vals = old_state.possible_vals.clone();
-            let next_tile_coord = get_lowest_entropy_tiles(&state.possible_vals);
+            let next_tile_coord = get_lowest_entropy_tile(&state.possible_vals);
             if next_tile_coord.is_none() {
                 break;
             }
@@ -244,32 +252,31 @@ pub fn generate_image(w: u32, h: u32, rules: &HashSet<Rule>) -> Option<Image> {
 #[cfg(test)]
 mod tests {
 
-    mod get_lowest_entropy_tiles {
+    mod get_lowest_entropy_tile {
         use rstest::{fixture, rstest};
+        use std::collections::HashSet;
 
         use crate::{
             enums::Tile,
-            state::{get_lowest_entropy_tiles, HashSetExt},
+            state::{get_lowest_entropy_tile, HashSetExt},
         };
 
         #[fixture]
-        fn one_at_2() -> Vec<Vec<std::collections::HashSet<Tile>>> {
+        fn one_at_2() -> Vec<Vec<HashSet<Tile>>> {
             vec![
                 vec![
-                    std::collections::HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green),
-                    std::collections::HashSet::new()
+                    HashSet::new().with(Tile::Blue).with(Tile::Green),
+                    HashSet::new()
                         .with(Tile::Blue)
                         .with(Tile::Green)
                         .with(Tile::Red),
                 ],
                 vec![
-                    std::collections::HashSet::new()
+                    HashSet::new()
                         .with(Tile::Blue)
                         .with(Tile::Green)
                         .with(Tile::Red),
-                    std::collections::HashSet::new()
+                    HashSet::new()
                         .with(Tile::Blue)
                         .with(Tile::Green)
                         .with(Tile::Red),
@@ -278,20 +285,18 @@ mod tests {
         }
 
         #[fixture]
-        fn one_at_2_and_1() -> Vec<Vec<std::collections::HashSet<Tile>>> {
+        fn one_at_2_and_1() -> Vec<Vec<HashSet<Tile>>> {
             vec![
                 vec![
-                    std::collections::HashSet::new().with(Tile::Blue),
-                    std::collections::HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green),
+                    HashSet::new().with(Tile::Blue),
+                    HashSet::new().with(Tile::Blue).with(Tile::Green),
                 ],
                 vec![
-                    std::collections::HashSet::new()
+                    HashSet::new()
                         .with(Tile::Blue)
                         .with(Tile::Green)
                         .with(Tile::Red),
-                    std::collections::HashSet::new()
+                    HashSet::new()
                         .with(Tile::Blue)
                         .with(Tile::Green)
                         .with(Tile::Red),
@@ -300,64 +305,140 @@ mod tests {
         }
 
         #[fixture]
-        fn one_at_1() -> Vec<Vec<std::collections::HashSet<Tile>>> {
+        fn one_at_1() -> Vec<Vec<HashSet<Tile>>> {
             vec![
                 vec![
-                    std::collections::HashSet::new().with(Tile::Blue),
-                    std::collections::HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green),
+                    HashSet::new().with(Tile::Blue),
+                    HashSet::new().with(Tile::Blue).with(Tile::Green),
                 ],
                 vec![
-                    std::collections::HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green),
-                    std::collections::HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green),
+                    HashSet::new().with(Tile::Blue).with(Tile::Green),
+                    HashSet::new().with(Tile::Blue).with(Tile::Green),
                 ],
             ]
         }
 
         #[fixture]
-        fn all_at_1() -> Vec<Vec<std::collections::HashSet<Tile>>> {
+        fn all_at_1() -> Vec<Vec<HashSet<Tile>>> {
             vec![
                 vec![
-                    std::collections::HashSet::new().with(Tile::Blue),
-                    std::collections::HashSet::new().with(Tile::Green),
+                    HashSet::new().with(Tile::Blue),
+                    HashSet::new().with(Tile::Green),
                 ],
                 vec![
-                    std::collections::HashSet::new().with(Tile::Red),
-                    std::collections::HashSet::new().with(Tile::Blue),
+                    HashSet::new().with(Tile::Red),
+                    HashSet::new().with(Tile::Blue),
                 ],
             ]
         }
 
         #[rstest]
-        pub fn test1(one_at_2: Vec<Vec<std::collections::HashSet<Tile>>>) {
+        pub fn test1(one_at_2: Vec<Vec<HashSet<Tile>>>) {
             println!("{:?}", one_at_2[0][0]);
-            let res = get_lowest_entropy_tiles(&one_at_2);
+            let res = get_lowest_entropy_tile(&one_at_2);
             assert_eq!(res, Some((0, 0)));
         }
 
         #[rstest]
-        pub fn test2(one_at_2_and_1: Vec<Vec<std::collections::HashSet<Tile>>>) {
-            let res = get_lowest_entropy_tiles(&one_at_2_and_1);
+        pub fn test2(one_at_2_and_1: Vec<Vec<HashSet<Tile>>>) {
+            let res = get_lowest_entropy_tile(&one_at_2_and_1);
             assert_eq!(res, Some((0, 1)));
         }
 
         #[rstest]
-        pub fn test3(one_at_1: Vec<Vec<std::collections::HashSet<Tile>>>) {
+        pub fn test3(one_at_1: Vec<Vec<HashSet<Tile>>>) {
             for _ in 0..1000 {
-                let res = get_lowest_entropy_tiles(&one_at_1);
+                let res = get_lowest_entropy_tile(&one_at_1);
                 assert_ne!(res, Some((0, 0)));
             }
         }
 
         #[rstest]
-        pub fn test4(all_at_1: Vec<Vec<std::collections::HashSet<Tile>>>) {
-            let res = get_lowest_entropy_tiles(&all_at_1);
+        pub fn test4(all_at_1: Vec<Vec<HashSet<Tile>>>) {
+            let res = get_lowest_entropy_tile(&all_at_1);
             assert_eq!(res, None);
+        }
+    }
+
+    mod contains_invalid_tiles {
+        use rstest::{fixture, rstest};
+        use std::collections::HashSet;
+
+        use crate::{
+            enums::Tile,
+            state::{contains_invalid_tiles, HashSetExt},
+        };
+
+        #[fixture]
+        fn all_ok() -> Vec<Vec<HashSet<Tile>>> {
+            vec![
+                vec![
+                    HashSet::new().with(Tile::Blue).with(Tile::Green),
+                    HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green)
+                        .with(Tile::Red),
+                ],
+                vec![
+                    HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green)
+                        .with(Tile::Red),
+                    HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green)
+                        .with(Tile::Red),
+                ],
+            ]
+        }
+
+        #[fixture]
+        fn one_not_ok() -> Vec<Vec<HashSet<Tile>>> {
+            vec![
+                vec![
+                    HashSet::new(),
+                    HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green)
+                        .with(Tile::Red),
+                ],
+                vec![
+                    HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green)
+                        .with(Tile::Red),
+                    HashSet::new()
+                        .with(Tile::Blue)
+                        .with(Tile::Green)
+                        .with(Tile::Red),
+                ],
+            ]
+        }
+
+        #[fixture]
+        fn all_not_ok() -> Vec<Vec<HashSet<Tile>>> {
+            vec![
+                vec![HashSet::new(), HashSet::new()],
+                vec![HashSet::new(), HashSet::new()],
+            ]
+        }
+
+        #[rstest]
+        pub fn test1(all_ok: Vec<Vec<HashSet<Tile>>>) {
+            let res = contains_invalid_tiles(&all_ok);
+            assert_eq!(res, false);
+        }
+
+        #[rstest]
+        pub fn test2(one_not_ok: Vec<Vec<HashSet<Tile>>>) {
+            let res = contains_invalid_tiles(&one_not_ok);
+            assert_eq!(res, true);
+        }
+
+        #[rstest]
+        pub fn test3(all_not_ok: Vec<Vec<HashSet<Tile>>>) {
+            let res = contains_invalid_tiles(&all_not_ok);
+            assert_eq!(res, true);
         }
     }
 }

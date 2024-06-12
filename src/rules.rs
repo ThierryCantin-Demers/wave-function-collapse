@@ -32,29 +32,29 @@ pub fn extract_rules(img: &Image) -> HashSet<Rule> {
 
         if up.is_some() {
             rules.insert(Rule::new(
-                curr_tile.into(),
                 up.unwrap().into(),
+                curr_tile.into(),
                 Direction::Up,
             ));
         }
         if down.is_some() {
             rules.insert(Rule::new(
-                curr_tile.into(),
                 down.unwrap().into(),
+                curr_tile.into(),
                 Direction::Down,
             ));
         }
         if left.is_some() {
             rules.insert(Rule::new(
-                curr_tile.into(),
                 left.unwrap().into(),
+                curr_tile.into(),
                 Direction::Left,
             ));
         }
         if right.is_some() {
             rules.insert(Rule::new(
-                curr_tile.into(),
                 right.unwrap().into(),
+                curr_tile.into(),
                 Direction::Right,
             ));
         }
@@ -167,4 +167,34 @@ pub fn get_possibilities_adjacent_pixels(
         None
     };
     (Some(curr), up, down, left, right)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::state::HashSetExt;
+
+    use super::*;
+
+    #[test]
+    fn test_extract_rules() {
+        let mut img = Image::new(2, 2);
+        img.set_pixel(0, 0, Tile::Red.into());
+        img.set_pixel(1, 0, Tile::Blue.into());
+        img.set_pixel(0, 1, Tile::Red.into());
+        img.set_pixel(1, 1, Tile::Red.into());
+
+        let rules = extract_rules(&img);
+        let expected = HashSet::new().with_all(vec![
+            Rule::new(Tile::Red, Tile::Red, Direction::Down),
+            Rule::new(Tile::Red, Tile::Red, Direction::Up),
+            Rule::new(Tile::Red, Tile::Red, Direction::Right),
+            Rule::new(Tile::Red, Tile::Red, Direction::Left),
+            Rule::new(Tile::Red, Tile::Blue, Direction::Left),
+            Rule::new(Tile::Blue, Tile::Red, Direction::Right),
+            Rule::new(Tile::Red, Tile::Blue, Direction::Down),
+            Rule::new(Tile::Blue, Tile::Red, Direction::Up),
+        ]);
+
+        assert_eq!(rules, expected);
+    }
 }
