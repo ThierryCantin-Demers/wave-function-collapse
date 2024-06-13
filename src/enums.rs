@@ -1,7 +1,7 @@
 use bmp::Pixel;
 use rand::Rng;
 
-#[derive(Clone, Debug, PartialEq, Hash, Eq)]
+#[derive(Clone, Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
 pub enum Tile {
     Red,
     Green,

@@ -8,25 +8,81 @@ use crate::{
     rules::{apply_rules, get_possibilities_adjacent_pixels, Rule},
 };
 use rand::prelude::SliceRandom;
+use std::fmt::Debug;
 use std::io::Write;
+
+#[derive(Clone)]
+pub struct PossibleVals {
+    pub inner: Vec<Vec<HashSet<Tile>>>,
+}
+
+impl PossibleVals {
+    pub fn set(&mut self, x: usize, y: usize, value: HashSet<Tile>) {
+        self.inner[x][y] = value;
+    }
+
+    pub fn get(&self, x: usize, y: usize) -> HashSet<Tile> {
+        self.inner[x][y].clone()
+    }
+
+    pub fn size(&self) -> Option<(usize, usize)> {
+        let w = self.inner.len();
+        if w == 0 {
+            return None;
+        }
+        let h = self.inner[0].len();
+        Some((w, h))
+    }
+}
+
+impl From<Vec<Vec<HashSet<Tile>>>> for PossibleVals {
+    fn from(inner: Vec<Vec<HashSet<Tile>>>) -> Self {
+        PossibleVals { inner }
+    }
+}
+
+impl Debug for PossibleVals {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Calculate the maximum length of the string representation of any value in each column
+        let mut max_lengths = self.inner[0].iter().map(|_| 0).collect::<Vec<_>>();
+        for row in self.inner.iter() {
+            for (tile, max_length) in row.iter().zip(max_lengths.iter_mut()) {
+                *max_length = (*max_length).max(format!("{:?}", tile).len());
+            }
+        }
+
+        write!(f, "\n")?;
+        for row in self.inner.iter() {
+            for (tile, &max_length) in row.iter().zip(max_lengths.iter()) {
+                // Use the maximum length as the width specifier
+                let mut sorted = tile.iter().collect::<Vec<_>>();
+                sorted.sort_unstable();
+                let s = format!("{:width$}", format!("{:?}", sorted), width = max_length);
+                write!(f, "{} ", s)?;
+            }
+            write!(f, "\n")?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct State {
-    pub possible_vals: Vec<Vec<HashSet<Tile>>>,
+    pub possible_vals: PossibleVals,
     pub width: usize,
     pub height: usize,
     pub curr_file_index: u32,
-    pub rules: HashSet<Rule>,
 }
 
 impl State {
-    pub fn new(w: usize, h: usize, all_tiles_types: &HashSet<Tile>, rules: HashSet<Rule>) -> Self {
+    pub fn new(w: usize, h: usize, all_tiles_types: &HashSet<Tile>) -> Self {
         State {
-            possible_vals: vec![vec![all_tiles_types.clone(); w]; h],
+            possible_vals: PossibleVals {
+                inner: vec![vec![all_tiles_types.clone(); w]; h],
+            },
             curr_file_index: 0,
             width: w,
             height: h,
-            rules,
         }
     }
 
@@ -43,9 +99,9 @@ impl State {
         let file = std::fs::File::create(file_path).unwrap();
         self.curr_file_index += 1;
         let mut w = std::io::BufWriter::new(file);
-        let max_col = self.possible_vals[0].len();
+        let max_col = self.possible_vals.inner[0].len();
         for col in 0..max_col {
-            for row in &self.possible_vals {
+            for row in &self.possible_vals.inner {
                 if let Some(tile) = row.get(col) {
                     for t in tile {
                         let _ = write!(w, "{}", t.minify());
@@ -59,7 +115,7 @@ impl State {
         w.flush().expect("Should be able to flush writer buffer.");
     }
 
-    pub fn save_rules_into_file(&self) {
+    pub fn save_rules_into_file(&self, rules: &HashSet<Rule>) {
         let mut file_path = PathBuf::new();
         file_path.push("imgs");
         file_path.push("output");
@@ -71,7 +127,7 @@ impl State {
         }
         let file = std::fs::File::create(file_path).unwrap();
         let mut w = std::io::BufWriter::new(file);
-        for rule in &self.rules {
+        for rule in rules {
             let _ = write!(
                 w,
                 "{:?} can be at {:?} of {:?}\n",
@@ -82,16 +138,22 @@ impl State {
     }
 
     pub fn get(&self, x: usize, y: usize) -> HashSet<Tile> {
-        self.possible_vals[x][y].clone()
+        self.possible_vals.inner[x][y].clone()
     }
 
     pub fn get_total_entropy(&self) -> usize {
-        self.possible_vals.iter().flatten().flatten().count()
+        self.possible_vals.inner.iter().flatten().flatten().count()
+    }
+
+    pub fn with_possibilities(&self, possible_vals: PossibleVals) -> Self {
+        let mut new_state = self.clone();
+        new_state.possible_vals = possible_vals;
+        new_state
     }
 }
 
-pub fn contains_invalid_tiles(state: &Vec<Vec<HashSet<Tile>>>) -> bool {
-    for row in state {
+pub fn contains_invalid_tiles(possible_vals: &PossibleVals) -> bool {
+    for row in possible_vals.inner.iter() {
         for tile in row {
             if tile.is_empty() {
                 return true;
@@ -127,11 +189,11 @@ pub fn get_image_from_possible_vals(state: &State) -> Option<Image> {
     Some(img)
 }
 
-fn get_lowest_entropy_tile(possible_vals: &Vec<Vec<HashSet<Tile>>>) -> Option<(usize, usize)> {
+fn get_lowest_entropy_tile(possible_vals: &PossibleVals) -> Option<(usize, usize)> {
     let mut min_entropy = usize::MAX;
     let mut min_entropy_tiles = Vec::new();
 
-    for (i, row) in possible_vals.iter().enumerate() {
+    for (i, row) in possible_vals.inner.iter().enumerate() {
         for (j, tile) in row.iter().enumerate() {
             let entropy = tile.len();
             if entropy == 1 {
@@ -153,6 +215,7 @@ fn get_lowest_entropy_tile(possible_vals: &Vec<Vec<HashSet<Tile>>>) -> Option<(u
 pub trait HashSetExt<T> {
     fn with(self, value: T) -> HashSet<T>;
     fn with_all(self: Self, values: Vec<T>) -> HashSet<T>;
+    fn from_all(values: Vec<T>) -> HashSet<T>;
 }
 
 impl<T: std::hash::Hash + Eq + Clone> HashSetExt<T> for HashSet<T> {
@@ -167,14 +230,18 @@ impl<T: std::hash::Hash + Eq + Clone> HashSetExt<T> for HashSet<T> {
         }
         self
     }
+
+    fn from_all(values: Vec<T>) -> HashSet<T> {
+        let mut new_set = HashSet::new();
+        for value in values {
+            new_set.insert(value);
+        }
+        new_set
+    }
 }
 
-pub fn print_tile_possibilities_and_adjacents(
-    possible_vals: &Vec<Vec<HashSet<Tile>>>,
-    x: usize,
-    y: usize,
-) {
-    let (curr, up, down, left, right) = get_possibilities_adjacent_pixels(possible_vals, x, y);
+pub fn print_tile_possibilities_and_adjacents(possible_vals: &PossibleVals, x: usize, y: usize) {
+    let (curr, up, down, left, right) = get_possibilities_adjacent_pixels(&possible_vals, x, y);
     println!("Current: {:?}", curr);
     println!("Up: {:?}", up);
     println!("Down: {:?}", down);
@@ -190,12 +257,13 @@ pub fn generate_image(w: u32, h: u32, rules: &HashSet<Rule>) -> Option<Image> {
         all_tiles_types.insert(rule.adj_tile.clone());
     }
 
-    let mut state: State = State::new(w as usize, h as usize, &all_tiles_types, rules.clone());
-    state.save_rules_into_file();
+    let mut state: State = State::new(w as usize, h as usize, &all_tiles_types);
+    state.save_rules_into_file(rules);
     state.save_into_file("initial");
 
     while state
         .possible_vals
+        .inner
         .iter()
         .any(|row| row.iter().any(|tile| tile.len() > 1))
     {
@@ -205,14 +273,14 @@ pub fn generate_image(w: u32, h: u32, rules: &HashSet<Rule>) -> Option<Image> {
             break;
         }
         let next_tile_coord = next_tile_coord.unwrap();
-        let next_tile_color = (*state.possible_vals[next_tile_coord.0 as usize]
+        let next_tile_color = (*state.possible_vals.inner[next_tile_coord.0 as usize]
             [next_tile_coord.1 as usize]
             .iter()
             .collect::<Vec<_>>()
             .choose(&mut rand::thread_rng())
             .unwrap())
         .clone();
-        state.possible_vals[next_tile_coord.0 as usize][next_tile_coord.1 as usize] =
+        state.possible_vals.inner[next_tile_coord.0 as usize][next_tile_coord.1 as usize] =
             HashSet::new().with(next_tile_color.clone());
 
         apply_rules(&mut state, rules);
@@ -223,14 +291,14 @@ pub fn generate_image(w: u32, h: u32, rules: &HashSet<Rule>) -> Option<Image> {
                 break;
             }
             let next_tile_coord = next_tile_coord.unwrap();
-            let next_tile_color = (*state.possible_vals[next_tile_coord.0 as usize]
+            let next_tile_color = (*state.possible_vals.inner[next_tile_coord.0 as usize]
                 [next_tile_coord.1 as usize]
                 .iter()
                 .collect::<Vec<_>>()
                 .choose(&mut rand::thread_rng())
                 .unwrap())
             .clone();
-            state.possible_vals[next_tile_coord.0 as usize][next_tile_coord.1 as usize] =
+            state.possible_vals.inner[next_tile_coord.0 as usize][next_tile_coord.1 as usize] =
                 HashSet::new().with(next_tile_color.clone());
             apply_rules(&mut state, rules);
             state.save_into_file("after_rule");
@@ -258,95 +326,103 @@ mod tests {
 
         use crate::{
             enums::Tile,
-            state::{get_lowest_entropy_tile, HashSetExt},
+            state::{get_lowest_entropy_tile, HashSetExt, PossibleVals},
         };
 
         #[fixture]
-        fn one_at_2() -> Vec<Vec<HashSet<Tile>>> {
-            vec![
-                vec![
-                    HashSet::new().with(Tile::Blue).with(Tile::Green),
-                    HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green)
-                        .with(Tile::Red),
+        fn one_at_2() -> PossibleVals {
+            PossibleVals {
+                inner: vec![
+                    vec![
+                        HashSet::new().with(Tile::Blue).with(Tile::Green),
+                        HashSet::new()
+                            .with(Tile::Blue)
+                            .with(Tile::Green)
+                            .with(Tile::Red),
+                    ],
+                    vec![
+                        HashSet::new()
+                            .with(Tile::Blue)
+                            .with(Tile::Green)
+                            .with(Tile::Red),
+                        HashSet::new()
+                            .with(Tile::Blue)
+                            .with(Tile::Green)
+                            .with(Tile::Red),
+                    ],
                 ],
-                vec![
-                    HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green)
-                        .with(Tile::Red),
-                    HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green)
-                        .with(Tile::Red),
-                ],
-            ]
+            }
         }
 
         #[fixture]
-        fn one_at_2_and_1() -> Vec<Vec<HashSet<Tile>>> {
-            vec![
-                vec![
-                    HashSet::new().with(Tile::Blue),
-                    HashSet::new().with(Tile::Blue).with(Tile::Green),
+        fn one_at_2_and_1() -> PossibleVals {
+            PossibleVals {
+                inner: vec![
+                    vec![
+                        HashSet::new().with(Tile::Blue),
+                        HashSet::new().with(Tile::Blue).with(Tile::Green),
+                    ],
+                    vec![
+                        HashSet::new()
+                            .with(Tile::Blue)
+                            .with(Tile::Green)
+                            .with(Tile::Red),
+                        HashSet::new()
+                            .with(Tile::Blue)
+                            .with(Tile::Green)
+                            .with(Tile::Red),
+                    ],
                 ],
-                vec![
-                    HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green)
-                        .with(Tile::Red),
-                    HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green)
-                        .with(Tile::Red),
-                ],
-            ]
+            }
         }
 
         #[fixture]
-        fn one_at_1() -> Vec<Vec<HashSet<Tile>>> {
-            vec![
-                vec![
-                    HashSet::new().with(Tile::Blue),
-                    HashSet::new().with(Tile::Blue).with(Tile::Green),
+        fn one_at_1() -> PossibleVals {
+            PossibleVals {
+                inner: vec![
+                    vec![
+                        HashSet::new().with(Tile::Blue),
+                        HashSet::new().with(Tile::Blue).with(Tile::Green),
+                    ],
+                    vec![
+                        HashSet::new().with(Tile::Blue).with(Tile::Green),
+                        HashSet::new().with(Tile::Blue).with(Tile::Green),
+                    ],
                 ],
-                vec![
-                    HashSet::new().with(Tile::Blue).with(Tile::Green),
-                    HashSet::new().with(Tile::Blue).with(Tile::Green),
-                ],
-            ]
+            }
         }
 
         #[fixture]
-        fn all_at_1() -> Vec<Vec<HashSet<Tile>>> {
-            vec![
-                vec![
-                    HashSet::new().with(Tile::Blue),
-                    HashSet::new().with(Tile::Green),
+        fn all_at_1() -> PossibleVals {
+            PossibleVals {
+                inner: vec![
+                    vec![
+                        HashSet::new().with(Tile::Blue),
+                        HashSet::new().with(Tile::Green),
+                    ],
+                    vec![
+                        HashSet::new().with(Tile::Red),
+                        HashSet::new().with(Tile::Blue),
+                    ],
                 ],
-                vec![
-                    HashSet::new().with(Tile::Red),
-                    HashSet::new().with(Tile::Blue),
-                ],
-            ]
+            }
         }
 
         #[rstest]
-        pub fn test1(one_at_2: Vec<Vec<HashSet<Tile>>>) {
-            println!("{:?}", one_at_2[0][0]);
+        pub fn test1(one_at_2: PossibleVals) {
+            println!("{:?}", one_at_2.inner[0][0]);
             let res = get_lowest_entropy_tile(&one_at_2);
             assert_eq!(res, Some((0, 0)));
         }
 
         #[rstest]
-        pub fn test2(one_at_2_and_1: Vec<Vec<HashSet<Tile>>>) {
+        pub fn test2(one_at_2_and_1: PossibleVals) {
             let res = get_lowest_entropy_tile(&one_at_2_and_1);
             assert_eq!(res, Some((0, 1)));
         }
 
         #[rstest]
-        pub fn test3(one_at_1: Vec<Vec<HashSet<Tile>>>) {
+        pub fn test3(one_at_1: PossibleVals) {
             for _ in 0..1000 {
                 let res = get_lowest_entropy_tile(&one_at_1);
                 assert_ne!(res, Some((0, 0)));
@@ -354,7 +430,7 @@ mod tests {
         }
 
         #[rstest]
-        pub fn test4(all_at_1: Vec<Vec<HashSet<Tile>>>) {
+        pub fn test4(all_at_1: PossibleVals) {
             let res = get_lowest_entropy_tile(&all_at_1);
             assert_eq!(res, None);
         }
@@ -366,77 +442,83 @@ mod tests {
 
         use crate::{
             enums::Tile,
-            state::{contains_invalid_tiles, HashSetExt},
+            state::{contains_invalid_tiles, HashSetExt, PossibleVals},
         };
 
         #[fixture]
-        fn all_ok() -> Vec<Vec<HashSet<Tile>>> {
-            vec![
-                vec![
-                    HashSet::new().with(Tile::Blue).with(Tile::Green),
-                    HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green)
-                        .with(Tile::Red),
+        fn all_ok() -> PossibleVals {
+            PossibleVals {
+                inner: vec![
+                    vec![
+                        HashSet::new().with(Tile::Blue).with(Tile::Green),
+                        HashSet::new()
+                            .with(Tile::Blue)
+                            .with(Tile::Green)
+                            .with(Tile::Red),
+                    ],
+                    vec![
+                        HashSet::new()
+                            .with(Tile::Blue)
+                            .with(Tile::Green)
+                            .with(Tile::Red),
+                        HashSet::new()
+                            .with(Tile::Blue)
+                            .with(Tile::Green)
+                            .with(Tile::Red),
+                    ],
                 ],
-                vec![
-                    HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green)
-                        .with(Tile::Red),
-                    HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green)
-                        .with(Tile::Red),
-                ],
-            ]
+            }
         }
 
         #[fixture]
-        fn one_not_ok() -> Vec<Vec<HashSet<Tile>>> {
-            vec![
-                vec![
-                    HashSet::new(),
-                    HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green)
-                        .with(Tile::Red),
+        fn one_not_ok() -> PossibleVals {
+            PossibleVals {
+                inner: vec![
+                    vec![
+                        HashSet::new(),
+                        HashSet::new()
+                            .with(Tile::Blue)
+                            .with(Tile::Green)
+                            .with(Tile::Red),
+                    ],
+                    vec![
+                        HashSet::new()
+                            .with(Tile::Blue)
+                            .with(Tile::Green)
+                            .with(Tile::Red),
+                        HashSet::new()
+                            .with(Tile::Blue)
+                            .with(Tile::Green)
+                            .with(Tile::Red),
+                    ],
                 ],
-                vec![
-                    HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green)
-                        .with(Tile::Red),
-                    HashSet::new()
-                        .with(Tile::Blue)
-                        .with(Tile::Green)
-                        .with(Tile::Red),
-                ],
-            ]
+            }
         }
 
         #[fixture]
-        fn all_not_ok() -> Vec<Vec<HashSet<Tile>>> {
-            vec![
-                vec![HashSet::new(), HashSet::new()],
-                vec![HashSet::new(), HashSet::new()],
-            ]
+        fn all_not_ok() -> PossibleVals {
+            PossibleVals {
+                inner: vec![
+                    vec![HashSet::new(), HashSet::new()],
+                    vec![HashSet::new(), HashSet::new()],
+                ],
+            }
         }
 
         #[rstest]
-        pub fn test1(all_ok: Vec<Vec<HashSet<Tile>>>) {
+        pub fn test1(all_ok: PossibleVals) {
             let res = contains_invalid_tiles(&all_ok);
             assert_eq!(res, false);
         }
 
         #[rstest]
-        pub fn test2(one_not_ok: Vec<Vec<HashSet<Tile>>>) {
+        pub fn test2(one_not_ok: PossibleVals) {
             let res = contains_invalid_tiles(&one_not_ok);
             assert_eq!(res, true);
         }
 
         #[rstest]
-        pub fn test3(all_not_ok: Vec<Vec<HashSet<Tile>>>) {
+        pub fn test3(all_not_ok: PossibleVals) {
             let res = contains_invalid_tiles(&all_not_ok);
             assert_eq!(res, true);
         }
