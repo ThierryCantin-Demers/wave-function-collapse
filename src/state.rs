@@ -51,7 +51,7 @@ impl Debug for PossibleVals {
             }
         }
 
-        write!(f, "\n")?;
+        writeln!(f)?;
         for row in self.inner.iter() {
             for (tile, &max_length) in row.iter().zip(max_lengths.iter()) {
                 // Use the maximum length as the width specifier
@@ -60,7 +60,7 @@ impl Debug for PossibleVals {
                 let s = format!("{:width$}", format!("{:?}", sorted), width = max_length);
                 write!(f, "{} ", s)?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
         Ok(())
     }
@@ -109,7 +109,7 @@ impl State {
                     let _ = write!(w, "\t");
                 }
             }
-            let _ = write!(w, "\n");
+            let _ = writeln!(w);
         }
 
         w.flush().expect("Should be able to flush writer buffer.");
@@ -128,9 +128,9 @@ impl State {
         let file = std::fs::File::create(file_path).unwrap();
         let mut w = std::io::BufWriter::new(file);
         for rule in rules {
-            let _ = write!(
+            let _ = writeln!(
                 w,
-                "{:?} can be at {:?} of {:?}\n",
+                "{:?} can be at {:?} of {:?}",
                 rule.curr_tile, rule.direction, rule.adj_tile
             );
         }
@@ -196,15 +196,21 @@ fn get_lowest_entropy_tile(possible_vals: &PossibleVals) -> Option<(usize, usize
     for (i, row) in possible_vals.inner.iter().enumerate() {
         for (j, tile) in row.iter().enumerate() {
             let entropy = tile.len();
+
             if entropy == 1 {
                 continue;
             }
-            if entropy < min_entropy {
-                min_entropy = entropy;
-                min_entropy_tiles.clear();
-                min_entropy_tiles.push((i, j));
-            } else if entropy == min_entropy {
-                min_entropy_tiles.push((i, j));
+
+            match entropy.cmp(&min_entropy) {
+                std::cmp::Ordering::Less => {
+                    min_entropy = entropy;
+                    min_entropy_tiles.clear();
+                    min_entropy_tiles.push((i, j));
+                }
+                std::cmp::Ordering::Equal => {
+                    min_entropy_tiles.push((i, j));
+                }
+                std::cmp::Ordering::Greater => {}
             }
         }
     }
@@ -214,17 +220,17 @@ fn get_lowest_entropy_tile(possible_vals: &PossibleVals) -> Option<(usize, usize
 
 pub trait HashSetExt<T> {
     fn with(self, value: T) -> HashSet<T>;
-    fn with_all(self: Self, values: Vec<T>) -> HashSet<T>;
+    fn with_all(self, values: Vec<T>) -> HashSet<T>;
     fn from_all(values: Vec<T>) -> HashSet<T>;
 }
 
 impl<T: std::hash::Hash + Eq + Clone> HashSetExt<T> for HashSet<T> {
-    fn with(mut self: Self, value: T) -> HashSet<T> {
+    fn with(mut self, value: T) -> HashSet<T> {
         self.insert(value);
         self
     }
 
-    fn with_all(mut self: Self, values: Vec<T>) -> HashSet<T> {
+    fn with_all(mut self, values: Vec<T>) -> HashSet<T> {
         for value in values {
             self.insert(value);
         }
@@ -241,7 +247,7 @@ impl<T: std::hash::Hash + Eq + Clone> HashSetExt<T> for HashSet<T> {
 }
 
 pub fn print_tile_possibilities_and_adjacents(possible_vals: &PossibleVals, x: usize, y: usize) {
-    let (curr, up, down, left, right) = get_possibilities_adjacent_pixels(&possible_vals, x, y);
+    let (curr, up, down, left, right) = get_possibilities_adjacent_pixels(possible_vals, x, y);
     println!("Current: {:?}", curr);
     println!("Up: {:?}", up);
     println!("Down: {:?}", down);
@@ -283,7 +289,7 @@ pub fn generate_image(w: u32, h: u32, rules: &HashSet<Rule>) -> Option<Image> {
         state.possible_vals.inner[next_tile_coord.0 as usize][next_tile_coord.1 as usize] =
             HashSet::new().with(next_tile_color.clone());
 
-        apply_rules(&mut state, rules);
+        apply_rules(&state, rules);
         while contains_invalid_tiles(&state.possible_vals) {
             state.possible_vals = old_state.possible_vals.clone();
             let next_tile_coord = get_lowest_entropy_tile(&state.possible_vals);
@@ -300,21 +306,17 @@ pub fn generate_image(w: u32, h: u32, rules: &HashSet<Rule>) -> Option<Image> {
             .clone();
             state.possible_vals.inner[next_tile_coord.0 as usize][next_tile_coord.1 as usize] =
                 HashSet::new().with(next_tile_color.clone());
-            apply_rules(&mut state, rules);
+            apply_rules(&state, rules);
             state.save_into_file("after_rule");
         }
 
         while old_state.get_total_entropy() != state.get_total_entropy() {
             old_state = state.clone();
-            apply_rules(&mut state, rules);
+            apply_rules(&state, rules);
         }
     }
 
-    return if let Some(img) = get_image_from_possible_vals(&state) {
-        Some(img)
-    } else {
-        None
-    };
+    get_image_from_possible_vals(&state)
 }
 
 #[cfg(test)]

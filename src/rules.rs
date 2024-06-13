@@ -24,39 +24,31 @@ impl Rule {
     }
 }
 
+pub type AdjacentPixels = (
+    Option<HashSet<Tile>>,
+    Option<HashSet<Tile>>,
+    Option<HashSet<Tile>>,
+    Option<HashSet<Tile>>,
+    Option<HashSet<Tile>>,
+);
+
 pub fn extract_rules(img: &Image) -> HashSet<Rule> {
     let mut rules: HashSet<Rule> = HashSet::new();
     for (x, y) in img.coordinates() {
         let curr_tile = img.get_pixel(x, y);
         let (up, down, left, right) = get_image_adjacent_pixels(img, x, y);
 
-        if up.is_some() {
-            rules.insert(Rule::new(
-                up.unwrap().into(),
-                curr_tile.into(),
-                Direction::Up,
-            ));
+        if let Some(up) = up {
+            rules.insert(Rule::new(up.into(), curr_tile.into(), Direction::Up));
         }
-        if down.is_some() {
-            rules.insert(Rule::new(
-                down.unwrap().into(),
-                curr_tile.into(),
-                Direction::Down,
-            ));
+        if let Some(down) = down {
+            rules.insert(Rule::new(down.into(), curr_tile.into(), Direction::Down));
         }
-        if left.is_some() {
-            rules.insert(Rule::new(
-                left.unwrap().into(),
-                curr_tile.into(),
-                Direction::Left,
-            ));
+        if let Some(left) = left {
+            rules.insert(Rule::new(left.into(), curr_tile.into(), Direction::Left));
         }
-        if right.is_some() {
-            rules.insert(Rule::new(
-                right.unwrap().into(),
-                curr_tile.into(),
-                Direction::Right,
-            ));
+        if let Some(right) = right {
+            rules.insert(Rule::new(right.into(), curr_tile.into(), Direction::Right));
         }
     }
 
@@ -99,11 +91,12 @@ pub fn apply_rules(curr_state: &State, rules: &HashSet<Rule>) -> Option<State> {
                             valid = false;
                             break;
                         }
-                    } else if rule.direction == Direction::Right && right.is_some() {
-                        if !right.as_ref().unwrap().contains(&rule.adj_tile) {
-                            valid = false;
-                            break;
-                        }
+                    } else if rule.direction == Direction::Right
+                        && right.is_some()
+                        && !right.as_ref().unwrap().contains(&rule.adj_tile)
+                    {
+                        valid = false;
+                        break;
                     }
                 }
                 if valid {
@@ -155,37 +148,31 @@ pub fn get_possibilities_adjacent_pixels(
     possible_vals: &PossibleVals,
     x: usize,
     y: usize,
-) -> (
-    Option<HashSet<Tile>>,
-    Option<HashSet<Tile>>,
-    Option<HashSet<Tile>>,
-    Option<HashSet<Tile>>,
-    Option<HashSet<Tile>>,
-) {
+) -> AdjacentPixels {
     let size = possible_vals.size();
     if size.is_none() {
         return (None, None, None, None, None);
     }
     let (w, h) = size.unwrap();
 
-    let curr = possible_vals.get(x as usize, y as usize).clone();
+    let curr = possible_vals.get(x, y).clone();
     let up = if y > 0 {
-        Some(possible_vals.get(x as usize, y as usize - 1).clone())
+        Some(possible_vals.get(x, y - 1).clone())
     } else {
         None
     };
     let down = if y < h - 1 {
-        Some(possible_vals.get(x as usize, y as usize + 1).clone())
+        Some(possible_vals.get(x, y + 1).clone())
     } else {
         None
     };
     let left = if x > 0 {
-        Some(possible_vals.get(x as usize - 1, y as usize).clone())
+        Some(possible_vals.get(x - 1, y).clone())
     } else {
         None
     };
     let right = if x < w - 1 {
-        Some(possible_vals.get(x as usize + 1, y as usize).clone())
+        Some(possible_vals.get(x + 1, y).clone())
     } else {
         None
     };
